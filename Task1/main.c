@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 #include <stdbool.h>
 
 #define NUM_THREADS   5
@@ -134,10 +135,92 @@ void run_round_robin_demo(void) {
 }
 
 /* ------------------------------------------------------------
+   PART 3: DEADLOCK PREVENTION DEMO
+   ------------------------------------------------------------
+   Two threads each need to hold TWO locks (lock_A and lock_B)
+   at the same time to do their work.
+
+   THE DANGER: if Thread 1 locks A then waits for B, while
+   Thread 2 locks B then waits for A, neither can ever proceed —
+   this is a deadlock caused by "circular wait."
+
+   THE FIX: enforce a strict global lock ordering. Every thread,
+   no matter what it's doing, must always acquire lock_A BEFORE
+   lock_B. This makes circular wait impossible, because no
+   thread will ever be found holding B while waiting for A.
+   ------------------------------------------------------------ */
+
+pthread_mutex_t lock_A;
+pthread_mutex_t lock_B;
+
+void *safe_task_1(void *arg) {
+    (void)arg;
+    printf("[Thread 1] locking A...\n");
+    pthread_mutex_lock(&lock_A);
+    usleep(100000); /* simulate doing some work while holding A */
+
+    printf("[Thread 1] locking B...\n");
+    pthread_mutex_lock(&lock_B);
+
+    printf("[Thread 1] holds A and B, working...\n");
+    usleep(100000);
+
+    pthread_mutex_unlock(&lock_B);
+    pthread_mutex_unlock(&lock_A);
+    printf("[Thread 1] released A and B.\n");
+    return NULL;
+}
+
+void *safe_task_2(void *arg) {
+    (void)arg;
+    /* Notice: this thread ALSO locks A before B — the same
+       order as Thread 1. That consistent ordering is the
+       entire deadlock-prevention strategy here. */
+    printf("[Thread 2] locking A...\n");
+    pthread_mutex_lock(&lock_A);
+    usleep(100000);
+
+    printf("[Thread 2] locking B...\n");
+    pthread_mutex_lock(&lock_B);
+
+    printf("[Thread 2] holds A and B, working...\n");
+    usleep(100000);
+
+    pthread_mutex_unlock(&lock_B);
+    pthread_mutex_unlock(&lock_A);
+    printf("[Thread 2] released A and B.\n");
+    return NULL;
+}
+
+void run_deadlock_prevention_demo(void) {
+    pthread_t t1, t2;
+
+    printf("=== PART 3: Deadlock Prevention Demo ===\n");
+    printf("Strategy: consistent lock ordering (always A before B)\n");
+    printf("prevents circular wait, one of the four necessary\n");
+    printf("conditions for deadlock.\n\n");
+
+    pthread_mutex_init(&lock_A, NULL);
+    pthread_mutex_init(&lock_B, NULL);
+
+    pthread_create(&t1, NULL, safe_task_1, NULL);
+    pthread_create(&t2, NULL, safe_task_2, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf("\nRESULT: Both threads completed successfully. No deadlock occurred.\n");
+
+    pthread_mutex_destroy(&lock_A);
+    pthread_mutex_destroy(&lock_B);
+}
+
+/* ------------------------------------------------------------
    MAIN
    ------------------------------------------------------------ */
 int main(void) {
     run_threading_demo();
     run_round_robin_demo();
+    run_deadlock_prevention_demo();
     return 0;
 }
