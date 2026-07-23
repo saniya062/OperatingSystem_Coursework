@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define MAX_LINE 256
 #define MAX_USERS          3
@@ -158,10 +160,89 @@ void run_auth_demo(void) {
 }
 
 /* ------------------------------------------------------------
+   PART 3: FILE PERMISSION SYSTEM (owner / group / others)
+   ------------------------------------------------------------
+   Uses the real POSIX permission model via chmod()/stat(),
+   the same rwx-per-owner/group/others scheme the Linux kernel
+   itself enforces on every file.
+   ------------------------------------------------------------ */
+
+void mode_to_string(mode_t mode, char *out) {
+    const char perms[] = "rwx";
+    for (int group = 0; group < 3; group++) {
+        for (int bit = 0; bit < 3; bit++) {
+            int shift = (2 - group) * 3 + (2 - bit);
+            out[group * 3 + bit] = (mode & (1 << shift)) ? perms[bit] : '-';
+        }
+    }
+    out[9] = '\0';
+}
+
+void print_permissions(const char *filename) {
+    struct stat st;
+    if (stat(filename, &st) != 0) {
+        printf("[PERMISSIONS] Could not stat '%s'.\n", filename);
+        return;
+    }
+    char perm_str[10];
+    mode_to_string(st.st_mode & 0777, perm_str);
+    printf("[PERMISSIONS] '%s' -> %s (octal %o)\n", filename, perm_str, st.st_mode & 0777);
+}
+
+int set_permissions(const char *filename, mode_t mode) {
+    if (chmod(filename, mode) != 0) {
+        printf("[CHMOD] Failed to set permissions on '%s'.\n", filename);
+        return -1;
+    }
+    printf("[CHMOD] Set '%s' to mode %o.\n", filename, mode);
+    return 0;
+}
+
+void check_access(const char *filename) {
+    printf("[ACCESS CHECK] '%s': ", filename);
+    printf("read=%s ",    access(filename, R_OK) == 0 ? "YES" : "NO");
+    printf("write=%s ",   access(filename, W_OK) == 0 ? "YES" : "NO");
+    printf("execute=%s\n",access(filename, X_OK) == 0 ? "YES" : "NO");
+}
+
+void run_permissions_demo(void) {
+    const char *filename = "secure_file.txt";
+
+    printf("=== PART 3: File Permission System ===\n\n");
+
+    FILE *fp = fopen(filename, "w");
+    fprintf(fp, "Confidential data.\n");
+    fclose(fp);
+    printf("[CREATE] '%s' created.\n", filename);
+
+    print_permissions(filename);
+    check_access(filename);
+    printf("\n");
+
+    set_permissions(filename, 0640);
+    print_permissions(filename);
+    check_access(filename);
+    printf("\n");
+
+    set_permissions(filename, 0000);
+    print_permissions(filename);
+    check_access(filename);
+    printf("\n");
+
+    set_permissions(filename, 0644);
+    print_permissions(filename);
+    check_access(filename);
+
+    remove(filename);
+}
+
+
+/* ------------------------------------------------------------
    MAIN
    ------------------------------------------------------------ */
 int main(void) {
     run_crud_demo();
     run_auth_demo();
+    run_permissions_demo();
     return 0;
 }
