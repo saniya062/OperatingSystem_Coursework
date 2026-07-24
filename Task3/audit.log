@@ -1,0 +1,20 @@
+[2026-07-24 08:56:01] CREATE       sample.txt
+[2026-07-24 08:56:01] READ         sample.txt
+[2026-07-24 08:56:01] WRITE        sample.txt
+[2026-07-24 08:56:01] READ         sample.txt
+[2026-07-24 08:56:01] DELETE       sample.txt
+[2026-07-24 08:56:01] READ_FAIL    sample.txt
+[2026-07-24 08:56:01] LOGIN_OK     saniya
+[2026-07-24 08:56:01] LOGIN_FAIL   admin
+[2026-07-24 08:56:01] LOGIN_OK     admin
+[2026-07-24 08:56:01] LOGIN_FAIL   guest
+[2026-07-24 08:56:01] LOGIN_FAIL   guest
+[2026-07-24 08:56:01] LOGIN_FAIL   guest
+[2026-07-24 08:56:01] LOGIN_LOCKOUT guest
+[2026-07-24 08:56:01] LOGIN_FAIL   nobody
+[2026-07-24 08:56:01] LOGIN_LOCKOUT nobody
+[2026-07-24 08:56:01] CREATE       secure_file.txt
+[2026-07-24 08:56:01] CHMOD        secure_file.txt -> mode 640
+[2026-07-24 08:56:01] CHMOD        secure_file.txt -> mode 0
+[2026-07-24 08:56:01] CHMOD        secure_file.txt -> mode 644
+[2026-07-24 08:56:01] DELETE       secure_file.txt

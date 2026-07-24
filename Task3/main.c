@@ -4,12 +4,55 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <time.h>
 
 #define MAX_LINE 256
 #define MAX_USERS          3
 #define USERNAME_LEN       32
 #define PASSWORD_LEN       32
 #define MAX_LOGIN_ATTEMPTS 3
+#define AUDIT_LOG_FILE     "audit.log"
+
+/* ------------------------------------------------------------
+   PART 0: AUDIT LOGGING
+   ------------------------------------------------------------
+   A single function every other part calls whenever a
+   security-relevant event happens (file created/read/
+   modified/deleted, permissions changed, login attempted).
+   Each entry is timestamped and appended to audit.log so
+   nothing overwrites previous history.
+   ------------------------------------------------------------ */
+void log_audit(const char *event, const char *detail) {
+    FILE *fp = fopen(AUDIT_LOG_FILE, "a");
+    if (fp == NULL) {
+        printf("[AUDIT] WARNING: could not write to audit log.\n");
+        return;
+    }
+
+    time_t now = time(NULL);
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+
+    fprintf(fp, "[%s] %-12s %s\n", timestamp, event, detail);
+    fclose(fp);
+}
+
+void print_audit_log(void) {
+    printf("=== AUDIT LOG CONTENTS (%s) ===\n", AUDIT_LOG_FILE);
+    printf("----------------------------------------------------------\n");
+    FILE *fp = fopen(AUDIT_LOG_FILE, "r");
+    if (fp == NULL) {
+        printf("(no audit log entries yet)\n");
+        return;
+    }
+    char line[MAX_LINE];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        printf("%s", line);
+    }
+    fclose(fp);
+    printf("----------------------------------------------------------\n");
+}
+
 /* ------------------------------------------------------------
    PART 1: FILE CRUD OPERATIONS (Create, Read, Write, Delete)
    ------------------------------------------------------------ */
@@ -19,11 +62,13 @@ int create_file(const char *filename, const char *content) {
     FILE *fp = fopen(filename, "w");
     if (fp == NULL) {
         printf("[CREATE] Failed to create '%s'.\n", filename);
+	log_audit("CREATE_FAIL", filename);
         return -1;
     }
     fprintf(fp, "%s", content);
     fclose(fp);
     printf("[CREATE] '%s' created successfully.\n", filename);
+    log_audit("CREATE", filename);
     return 0;
 }
 
@@ -32,6 +77,7 @@ int read_file(const char *filename) {
     FILE *fp = fopen(filename, "r");
     if (fp == NULL) {
         printf("[READ] '%s' does not exist.\n", filename);
+	log_audit("READ_FAIL", filename);
         return -1;
     }
 
@@ -43,6 +89,7 @@ int read_file(const char *filename) {
     }
     printf("\n----------------------------------------\n");
     fclose(fp);
+    log_audit("READ", filename);
     return 0;
 }
 
@@ -52,11 +99,13 @@ int append_to_file(const char *filename, const char *content) {
     FILE *fp = fopen(filename, "a");
     if (fp == NULL) {
         printf("[WRITE] Failed to open '%s' for writing.\n", filename);
+	log_audit("WRITE_FAIL", filename);
         return -1;
     }
     fprintf(fp, "%s", content);
     fclose(fp);
     printf("[WRITE] Appended to '%s' successfully.\n", filename);
+    log_audit("WRITE", filename);
     return 0;
 }
 
@@ -64,9 +113,11 @@ int append_to_file(const char *filename, const char *content) {
 int delete_file(const char *filename) {
     if (remove(filename) == 0) {
         printf("[DELETE] '%s' deleted successfully.\n", filename);
+	log_audit("DELETE", filename);
         return 0;
     } else {
         printf("[DELETE] Failed to delete '%s' (may not exist).\n", filename);
+	log_audit("DELETE_FAIL", filename);
         return -1;
     }
 }
@@ -130,12 +181,15 @@ bool login_session(const char *username, const char *attempts[], int num_attempt
 
         if (authenticate(username, attempts[i])) {
             printf("SUCCESS\n");
+	    log_audit("LOGIN_OK", username);
             return true;
         } else {
             printf("FAILED\n");
+	    log_audit("LOGIN_FAIL", username);
         }
     }
     printf("[LOGIN] Account locked - too many failed attempts for '%s'.\n", username);
+    log_audit("LOGIN_LOCKOUT", username);
     return false;
 }
 
@@ -192,9 +246,14 @@ void print_permissions(const char *filename) {
 int set_permissions(const char *filename, mode_t mode) {
     if (chmod(filename, mode) != 0) {
         printf("[CHMOD] Failed to set permissions on '%s'.\n", filename);
+	log_audit("CHMOD_FAIL", filename);
         return -1;
     }
     printf("[CHMOD] Set '%s' to mode %o.\n", filename, mode);
+    
+    char detail[MAX_LINE];
+    snprintf(detail, sizeof(detail), "%s -> mode %o", filename, mode);
+    log_audit("CHMOD", detail);
     return 0;
 }
 
@@ -214,6 +273,7 @@ void run_permissions_demo(void) {
     fprintf(fp, "Confidential data.\n");
     fclose(fp);
     printf("[CREATE] '%s' created.\n", filename);
+    log_audit("CREATE", filename);
 
     print_permissions(filename);
     check_access(filename);
@@ -234,6 +294,7 @@ void run_permissions_demo(void) {
     check_access(filename);
 
     remove(filename);
+    log_audit("DELETE", filename);
 }
 
 
@@ -244,5 +305,10 @@ int main(void) {
     run_crud_demo();
     run_auth_demo();
     run_permissions_demo();
+
+    printf("\n");
+    print_audit_log();
+
     return 0;
+
 }
